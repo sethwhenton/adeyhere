@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Location } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
+import { useAppStore } from '@/store/appStore';
 
 interface GeolocationState {
   location: Location | null;
@@ -19,6 +21,7 @@ export function useGeolocation(): GeolocationState {
     error: null,
     loading: true,
   });
+  const { currentUser, updateUserLocation } = useAppStore();
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -31,15 +34,32 @@ export function useGeolocation(): GeolocationState {
     }
 
     const watchId = navigator.geolocation.watchPosition(
-      (position) => {
+      async (position) => {
+        const newLocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+
         setState({
-          location: {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          },
+          location: newLocation,
           error: null,
           loading: false,
         });
+
+        // Update local store
+        updateUserLocation(newLocation);
+
+        // Update database every position change (with debouncing in production)
+        if (currentUser?.id) {
+          try {
+            await supabase
+              .from('profiles')
+              .update({ location: newLocation })
+              .eq('id', currentUser.id);
+          } catch (error) {
+            console.error('Failed to update location in database:', error);
+          }
+        }
       },
       (error) => {
         // Use default location if permission denied or error
@@ -57,7 +77,7 @@ export function useGeolocation(): GeolocationState {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
+  }, [currentUser?.id, updateUserLocation]);
 
   return state;
 }

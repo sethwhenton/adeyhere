@@ -5,6 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { useAppStore } from '@/store/appStore';
+import { useCreateSpace } from '@/integrations/supabase/hooks';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
 interface CreateSpaceModalProps {
   isOpen: boolean;
@@ -15,15 +18,49 @@ export function CreateSpaceModal({ isOpen, onClose }: CreateSpaceModalProps) {
   const [name, setName] = useState('');
   const [radius, setRadius] = useState([200]);
   const [duration, setDuration] = useState([3]);
-  const { currentUser, createSpace } = useAppStore();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { currentUser, setActiveSpace } = useAppStore();
+  const createMutation = useCreateSpace();
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (name.trim() && currentUser) {
-      createSpace(name.trim(), currentUser.location, radius[0], duration[0]);
-      setName('');
-      setRadius([200]);
-      setDuration([3]);
-      onClose();
+      setIsSubmitting(true);
+      try {
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + duration[0]);
+
+        const newSpace = await createMutation.mutateAsync({
+          name: name.trim(),
+          center: currentUser.location,
+          radius: radius[0],
+          hostId: currentUser.id,
+          hostName: currentUser.displayName,
+          expiresAt,
+        });
+
+        // Set the active space in store to enter Radar view
+        setActiveSpace({
+          id: newSpace.id,
+          name: newSpace.name,
+          hostId: newSpace.host_id,
+          hostName: currentUser.displayName,
+          center: { lat: newSpace.center_lat, lng: newSpace.center_lng },
+          radius: newSpace.radius,
+          createdAt: new Date(newSpace.created_at),
+          expiresAt: new Date(newSpace.expires_at),
+          participants: [] // Will be fetched by RadarView
+        });
+
+        setName('');
+        setRadius([200]);
+        setDuration([3]);
+        onClose();
+        toast.success("Your space is live! 🎉");
+      } catch (error) {
+        toast.error("Failed to create space");
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -145,10 +182,10 @@ export function CreateSpaceModal({ isOpen, onClose }: CreateSpaceModalProps) {
               {/* Create Button */}
               <Button
                 onClick={handleCreate}
-                disabled={!name.trim()}
+                disabled={!name.trim() || isSubmitting}
                 className="w-full h-12 rounded-xl gradient-space text-primary-foreground font-semibold shadow-soft hover:shadow-glow transition-all disabled:opacity-50"
               >
-                Go Live 🎉
+                {isSubmitting ? <Loader2 className="animate-spin" /> : "Go Live 🎉"}
               </Button>
             </div>
           </motion.div>

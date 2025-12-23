@@ -1,45 +1,61 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, Megaphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAppStore } from '@/store/appStore';
 import { format } from 'date-fns';
+import { useMessages, useSendMessage, useParticipants } from '@/integrations/supabase/hooks';
+import { useRealtimeMessages } from '@/integrations/supabase/realtime';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
 interface TownSquareProps {
   isOpen: boolean;
   onClose: () => void;
+  broadcastOnly?: boolean;
 }
 
-export function TownSquare({ isOpen, onClose }: TownSquareProps) {
+export function TownSquare({ isOpen, onClose, broadcastOnly = false }: TownSquareProps) {
   const [message, setMessage] = useState('');
   const [showBroadcast, setShowBroadcast] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { messages, broadcasts, currentUser, activeSpace, sendMessage, sendBroadcast } = useAppStore();
+  const { currentUser, activeSpace } = useAppStore();
+
+  const { data: messages = [], isLoading } = useMessages(activeSpace?.id);
+  const { data: participants = [] } = useParticipants(activeSpace?.id);
+  const sendMessageMutation = useSendMessage();
+
+  // Real-time subscription for instant message updates
+  useRealtimeMessages(activeSpace?.id);
 
   const isHost = activeSpace?.hostId === currentUser?.id;
+  const canSendMessage = isHost || !broadcastOnly;
 
-  const allMessages = [...messages, ...broadcasts].sort(
-    (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
-  );
+  const allMessages = messages; // Already sorted in the hook
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [allMessages]);
 
-  const handleSend = () => {
-    if (message.trim()) {
-      if (showBroadcast && isHost) {
-        sendBroadcast(message.trim());
-      } else {
-        sendMessage(message.trim());
+  const handleSend = async () => {
+    if (message.trim() && activeSpace && currentUser) {
+      try {
+        await sendMessageMutation.mutateAsync({
+          spaceId: activeSpace.id,
+          userId: currentUser.id,
+          content: message.trim(),
+          isBroadcast: showBroadcast && isHost
+        });
+        setMessage('');
+        setShowBroadcast(false);
+      } catch (e) {
+        toast.error("Failed to send message");
       }
-      setMessage('');
-      setShowBroadcast(false);
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyPress = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -72,7 +88,7 @@ export function TownSquare({ isOpen, onClose }: TownSquareProps) {
               <div>
                 <h2 className="text-lg font-bold text-foreground">Town Square</h2>
                 <p className="text-sm text-muted-foreground">
-                  {activeSpace?.participants.length} people chatting
+                  {participants.length} people chatting
                 </p>
               </div>
               <button
@@ -154,11 +170,10 @@ export function TownSquare({ isOpen, onClose }: TownSquareProps) {
                           </span>
                         )}
                         <div
-                          className={`px-4 py-2 rounded-2xl ${
-                            isOwn
-                              ? 'bg-space text-primary-foreground rounded-br-md'
-                              : 'bg-secondary text-foreground rounded-bl-md'
-                          }`}
+                          className={`px-4 py-2 rounded-2xl ${isOwn
+                            ? 'bg-space text-primary-foreground rounded-br-md'
+                            : 'bg-secondary text-foreground rounded-bl-md'
+                            }`}
                         >
                           {msg.content}
                         </div>
@@ -175,15 +190,22 @@ export function TownSquare({ isOpen, onClose }: TownSquareProps) {
 
             {/* Input */}
             <div className="p-4 border-t border-border">
+              {/* Broadcast Only Notice */}
+              {broadcastOnly && !isHost && (
+                <div className="flex items-center gap-2 px-4 py-3 mb-3 rounded-xl bg-broadcast/10 text-broadcast">
+                  <Megaphone className="w-4 h-4" />
+                  <span className="text-sm">Chat is in broadcast mode. Only the host can send messages.</span>
+                </div>
+              )}
+
               {/* Broadcast toggle for host */}
               {isHost && (
                 <button
                   onClick={() => setShowBroadcast(!showBroadcast)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm mb-3 transition-colors ${
-                    showBroadcast
-                      ? 'bg-broadcast/20 text-broadcast'
-                      : 'bg-secondary text-muted-foreground'
-                  }`}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm mb-3 transition-colors ${showBroadcast
+                    ? 'bg-broadcast/20 text-broadcast'
+                    : 'bg-secondary text-muted-foreground'
+                    }`}
                 >
                   <Megaphone className="w-4 h-4" />
                   {showBroadcast ? 'Broadcasting to all' : 'Send as broadcast'}
@@ -193,24 +215,23 @@ export function TownSquare({ isOpen, onClose }: TownSquareProps) {
               <div className="flex gap-3">
                 <Input
                   type="text"
-                  placeholder={showBroadcast ? 'Announce to everyone...' : 'Say something nice...'}
+                  placeholder={!canSendMessage ? 'Chat is in broadcast mode...' : showBroadcast ? 'Announce to everyone...' : 'Say something nice...'}
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  className={`flex-1 h-12 rounded-2xl ${
-                    showBroadcast
-                      ? 'bg-broadcast/10 border-broadcast/30 focus:border-broadcast'
-                      : 'bg-secondary border-border focus:border-primary'
-                  }`}
+                  disabled={!canSendMessage}
+                  className={`flex-1 h-12 rounded-2xl ${showBroadcast
+                    ? 'bg-broadcast/10 border-broadcast/30 focus:border-broadcast'
+                    : 'bg-secondary border-border focus:border-primary'
+                    } ${!canSendMessage ? 'opacity-50' : ''}`}
                 />
                 <Button
                   onClick={handleSend}
-                  disabled={!message.trim()}
-                  className={`w-12 h-12 rounded-2xl ${
-                    showBroadcast
-                      ? 'bg-broadcast hover:bg-broadcast/90'
-                      : 'gradient-space'
-                  } shadow-soft disabled:opacity-50`}
+                  disabled={!message.trim() || !canSendMessage}
+                  className={`w-12 h-12 rounded-2xl ${showBroadcast
+                    ? 'bg-broadcast hover:bg-broadcast/90'
+                    : 'gradient-space'
+                    } shadow-soft disabled:opacity-50`}
                 >
                   <Send className="w-5 h-5" />
                 </Button>

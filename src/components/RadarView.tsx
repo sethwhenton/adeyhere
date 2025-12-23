@@ -1,16 +1,66 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Ghost, Eye, MessageCircle, ChevronDown, Send, ArrowLeft, Radio } from 'lucide-react';
+import { Ghost, Eye, MessageCircle, Send, ArrowLeft, Radio, UserPlus, Sparkles, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/store/appStore';
 import { distanceToRadarPosition } from '@/lib/geo';
 import { User } from '@/types';
 import { TownSquare } from './TownSquare';
+import { PounceModal } from './PounceModal';
+import { StatusPicker } from './StatusPicker';
+import { ConnectionRequestModal } from './ConnectionRequestModal';
+import { PounceNotifications } from './PounceNotifications';
+import { HostControlsPanel } from './HostControlsPanel';
+import { SpaceAnalyticsModal } from './SpaceAnalyticsModal';
+import { ModerationModal } from './ModerationModal';
+import { BeaconModal } from './BeaconModal';
+import { ThemePicker } from './ThemePicker';
+import { useParticipants } from '@/integrations/supabase/hooks';
+import { useRealtimeParticipants } from '@/integrations/supabase/realtime';
+import { useToggleGhostMode } from '@/integrations/supabase/interactions';
+import { haptics } from '@/lib/haptics';
+import { toast } from 'sonner';
 
 export function RadarView() {
-  const { activeSpace, currentUser, toggleGhostMode, leaveSpace, setViewMode } = useAppStore();
+  const { activeSpace, currentUser, toggleGhostMode, logout } = useAppStore();
   const [selectedNode, setSelectedNode] = useState<User | null>(null);
   const [showChat, setShowChat] = useState(false);
+  const [showPounce, setShowPounce] = useState(false);
+  const [showStatus, setShowStatus] = useState(false);
+  const [showConnectionRequest, setShowConnectionRequest] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showModeration, setShowModeration] = useState(false);
+  const [showBeacon, setShowBeacon] = useState(false);
+  const [showTheme, setShowTheme] = useState(false);
+  const [broadcastOnly, setBroadcastOnly] = useState(activeSpace?.broadcastOnly || false);
+
+  // Sync broadcast mode if space setting changes
+  useEffect(() => {
+    if (activeSpace?.broadcastOnly !== undefined) {
+      setBroadcastOnly(activeSpace.broadcastOnly);
+    }
+  }, [activeSpace?.broadcastOnly]);
+
+  const { data: participants = [] } = useParticipants(activeSpace?.id);
+  const ghostModeMutation = useToggleGhostMode();
+  const leaveSpace = () => logout();
+
+  // Real-time subscription for instant participant updates
+  useRealtimeParticipants(activeSpace?.id);
+
+  // Handle ghost mode with database sync
+  const handleGhostModeToggle = async () => {
+    if (!currentUser) return;
+    const newGhostState = !currentUser.isGhost;
+    toggleGhostMode(); // Update local state immediately
+    try {
+      await ghostModeMutation.mutateAsync({ userId: currentUser.id, isGhost: newGhostState });
+      toast(newGhostState ? 'You are now invisible 👻' : 'You are now visible ✨');
+    } catch (error) {
+      toggleGhostMode(); // Revert on error
+      toast.error('Failed to update ghost mode');
+    }
+  };
 
   if (!activeSpace || !currentUser) return null;
 
@@ -18,6 +68,19 @@ export function RadarView() {
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-background">
+      {/* Pounce Notifications */}
+      <PounceNotifications userId={currentUser?.id} />
+
+      {/* Host Controls Panel - Only visible to hosts */}
+      {isHost && (
+        <HostControlsPanel
+          spaceId={activeSpace.id}
+          spaceName={activeSpace.name}
+          broadcastOnly={broadcastOnly}
+          onOpenAnalytics={() => setShowAnalytics(true)}
+        />
+      )}
+
       {/* Radar Background */}
       <div className="absolute inset-0 flex items-center justify-center">
         {/* Radar circles */}
@@ -59,7 +122,7 @@ export function RadarView() {
         </motion.div>
 
         {/* Other participants as nodes */}
-        {activeSpace.participants
+        {participants
           .filter((p) => p.id !== currentUser.id)
           .map((participant, index) => {
             const position = distanceToRadarPosition(
@@ -83,13 +146,12 @@ export function RadarView() {
                 }}
               >
                 <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center text-lg border-2 border-card shadow-soft transition-transform hover:scale-110 ${
-                    participant.isHost
-                      ? 'bg-broadcast text-broadcast-foreground'
-                      : participant.isGhost
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-lg border-2 border-card shadow-soft transition-transform hover:scale-110 ${participant.isHost
+                    ? 'bg-broadcast text-broadcast-foreground'
+                    : participant.isGhost
                       ? 'bg-ghost text-card'
                       : 'bg-secondary text-foreground'
-                  }`}
+                    }`}
                 >
                   {participant.isHost ? '👑' : participant.isGhost ? '👻' : participant.avatar}
                 </div>
@@ -128,7 +190,7 @@ export function RadarView() {
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {activeSpace.participants.length} people here
+                  {participants.length} people here
                 </p>
               </div>
             </div>
@@ -147,15 +209,15 @@ export function RadarView() {
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: 0.3 }}
-        className="absolute top-28 right-4 z-30"
+        className="absolute top-28 right-4 z-30 flex flex-col gap-2"
       >
         <button
-          onClick={toggleGhostMode}
-          className={`flex items-center gap-2 px-4 py-3 rounded-2xl shadow-card transition-all ${
-            currentUser.isGhost
-              ? 'bg-ghost/20 text-ghost'
-              : 'bg-card text-foreground'
-          }`}
+          onClick={handleGhostModeToggle}
+          disabled={ghostModeMutation.isPending}
+          className={`flex items-center gap-2 px-4 py-3 rounded-2xl shadow-card transition-all ${currentUser.isGhost
+            ? 'bg-ghost/20 text-ghost'
+            : 'bg-card text-foreground'
+            }`}
         >
           {currentUser.isGhost ? (
             <>
@@ -168,6 +230,42 @@ export function RadarView() {
               <span className="text-sm font-medium">Visible</span>
             </>
           )}
+        </button>
+
+        {/* Status Vibe Button */}
+        <button
+          onClick={() => {
+            setShowStatus(true);
+            haptics.tap();
+          }}
+          className="flex items-center gap-2 px-4 py-3 rounded-2xl shadow-card bg-card text-foreground"
+        >
+          <Sparkles className="w-5 h-5" />
+          <span className="text-sm font-medium">Set Vibe</span>
+        </button>
+
+        {/* Beacon Button */}
+        <button
+          onClick={() => {
+            setShowBeacon(true);
+            haptics.tap();
+          }}
+          className="flex items-center gap-2 px-4 py-3 rounded-2xl shadow-card bg-gradient-to-r from-red-500/20 to-amber-500/20 text-foreground"
+        >
+          <Radio className="w-5 h-5 text-amber-500" />
+          <span className="text-sm font-medium">Beacon</span>
+        </button>
+
+        {/* Theme Button */}
+        <button
+          onClick={() => {
+            setShowTheme(true);
+            haptics.tap();
+          }}
+          className="flex items-center gap-2 px-4 py-3 rounded-2xl shadow-card bg-card text-foreground"
+        >
+          <Palette className="w-5 h-5" />
+          <span className="text-sm font-medium">Theme</span>
         </button>
       </motion.div>
 
@@ -199,19 +297,18 @@ export function RadarView() {
             <div className="bg-card rounded-2xl p-4 shadow-card">
               <div className="flex items-center gap-4">
                 <div
-                  className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl ${
-                    selectedNode.isHost
-                      ? 'bg-broadcast/20'
-                      : selectedNode.isGhost
+                  className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl ${selectedNode.isHost
+                    ? 'bg-broadcast/20'
+                    : selectedNode.isGhost
                       ? 'bg-ghost/20'
                       : 'bg-secondary'
-                  }`}
+                    }`}
                 >
                   {selectedNode.isHost
                     ? '👑'
                     : selectedNode.isGhost
-                    ? '👻'
-                    : selectedNode.avatar}
+                      ? '👻'
+                      : selectedNode.avatar}
                 </div>
                 <div className="flex-1">
                   <h3 className="font-semibold text-foreground">
@@ -234,17 +331,20 @@ export function RadarView() {
                   variant="secondary"
                   className="flex-1 h-10 rounded-xl"
                   onClick={() => {
-                    // TODO: Implement Say Hi feature
-                    setSelectedNode(null);
+                    setShowPounce(true);
                   }}
                 >
                   <Send className="w-4 h-4 mr-2" />
                   Say Hi
                 </Button>
-                {selectedNode.isGhost && (
-                  <Button variant="secondary" className="flex-1 h-10 rounded-xl">
-                    <Eye className="w-4 h-4 mr-2" />
-                    Request Identity
+                {!selectedNode.isGhost && (
+                  <Button
+                    variant="secondary"
+                    className="flex-1 h-10 rounded-xl"
+                    onClick={() => setShowConnectionRequest(true)}
+                  >
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Link
                   </Button>
                 )}
               </div>
@@ -255,6 +355,80 @@ export function RadarView() {
 
       {/* Town Square Chat */}
       <TownSquare isOpen={showChat} onClose={() => setShowChat(false)} />
+
+      {/* Pounce Modal */}
+      {selectedNode && (
+        <PounceModal
+          isOpen={showPounce}
+          onClose={() => setShowPounce(false)}
+          targetUser={{
+            id: selectedNode.id,
+            displayName: selectedNode.displayName,
+            avatar: selectedNode.avatar,
+          }}
+          currentUserId={currentUser.id}
+          spaceId={activeSpace.id}
+        />
+      )}
+
+      {/* Connection Request Modal */}
+      {selectedNode && (
+        <ConnectionRequestModal
+          isOpen={showConnectionRequest}
+          onClose={() => setShowConnectionRequest(false)}
+          targetUser={{
+            id: selectedNode.id,
+            displayName: selectedNode.displayName,
+            avatar: selectedNode.avatar,
+          }}
+          currentUserId={currentUser.id}
+        />
+      )}
+
+      {/* Status Picker */}
+      <StatusPicker
+        isOpen={showStatus}
+        onClose={() => setShowStatus(false)}
+        userId={currentUser.id}
+      />
+
+      {/* Space Analytics Modal */}
+      <SpaceAnalyticsModal
+        isOpen={showAnalytics}
+        onClose={() => setShowAnalytics(false)}
+        spaceId={activeSpace.id}
+        spaceName={activeSpace.name}
+      />
+
+      {/* Moderation Modal */}
+      {selectedNode && (
+        <ModerationModal
+          isOpen={showModeration}
+          onClose={() => setShowModeration(false)}
+          targetUser={{
+            id: selectedNode.id,
+            displayName: selectedNode.displayName,
+            avatar: selectedNode.avatar,
+          }}
+          spaceId={activeSpace.id}
+          currentUserId={currentUser.id}
+          isHost={isHost}
+        />
+      )}
+
+      {/* Beacon Modal */}
+      <BeaconModal
+        isOpen={showBeacon}
+        onClose={() => setShowBeacon(false)}
+        userId={currentUser.id}
+      />
+
+      {/* Theme Picker */}
+      <ThemePicker
+        isOpen={showTheme}
+        onClose={() => setShowTheme(false)}
+      />
     </div>
   );
 }
+

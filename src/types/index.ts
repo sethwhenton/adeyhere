@@ -22,6 +22,7 @@ export interface Space {
   createdAt: Date;
   expiresAt: Date;
   participants: User[];
+  broadcastOnly?: boolean;
 }
 
 export interface Message {
@@ -32,11 +33,6 @@ export interface Message {
   content: string;
   timestamp: Date;
   isBroadcast?: boolean;
-}
-
-export interface ChatState {
-  messages: Message[];
-  broadcasts: Message[];
 }
 
 export type ViewMode = 'map' | 'radar' | 'chat';

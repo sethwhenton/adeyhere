@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Map, Radar, MessageSquare, User } from 'lucide-react';
+import { Map, Radar } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { ViewMode } from '@/types';
 
@@ -38,11 +38,10 @@ export function BottomNav() {
               <button
                 key={item.id}
                 onClick={() => setViewMode(item.id)}
-                className={`relative flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${
-                  isActive
+                className={`relative flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${isActive
                     ? 'text-space-deep'
                     : 'text-muted-foreground hover:text-foreground'
-                }`}
+                  }`}
               >
                 {isActive && (
                   <motion.div

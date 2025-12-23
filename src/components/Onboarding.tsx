@@ -1,27 +1,62 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, User, Camera, ArrowRight } from 'lucide-react';
+import { MapPin, User, ArrowRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAppStore } from '@/store/appStore';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const avatarOptions = ['😊', '🎸', '🎨', '📸', '🎭', '🎵', '☕', '🌟', '🦋', '🌸', '🍀', '🔥'];
 
 export function Onboarding() {
   const [displayName, setDisplayName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const { setCurrentUser, setOnboarded } = useAppStore();
 
-  const handleContinue = () => {
-    if (displayName.trim()) {
-      setCurrentUser({
-        id: `user-${Date.now()}`,
-        displayName: displayName.trim(),
+  const handleContinue = async () => {
+    if (!displayName.trim()) return;
+
+    setIsLoading(true);
+    try {
+      // 1. Sign in anonymously
+      const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
+
+      if (authError) throw authError;
+      if (!authData.user) throw new Error("Authentication failed");
+
+      // 2. Upsert profile
+      const userProfile = {
+        id: authData.user.id,
+        display_name: displayName.trim(),
         avatar: selectedAvatar || '😊',
-        isGhost: false,
+        is_ghost: false,
         location: { lat: 37.7749, lng: -122.4194 },
+      };
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert(userProfile);
+
+      if (profileError) throw profileError;
+
+      // 3. Update store
+      setCurrentUser({
+        id: authData.user.id,
+        displayName: userProfile.display_name,
+        avatar: userProfile.avatar,
+        isGhost: userProfile.is_ghost,
+        location: userProfile.location,
       });
+
       setOnboarded(true);
+      toast.success("Welcome to Adey Here!");
+    } catch (error: any) {
+      console.error("Onboarding error:", error);
+      toast.error(error.message || "Something went wrong during onboarding");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -89,10 +124,9 @@ export function Onboarding() {
                   whileTap={{ scale: 0.95 }}
                   onClick={() => setSelectedAvatar(emoji)}
                   className={`w-12 h-12 rounded-xl text-2xl flex items-center justify-center transition-all
-                    ${
-                      selectedAvatar === emoji
-                        ? 'bg-primary shadow-soft ring-2 ring-primary'
-                        : 'bg-secondary hover:bg-secondary/80'
+                    ${selectedAvatar === emoji
+                      ? 'bg-primary shadow-soft ring-2 ring-primary'
+                      : 'bg-secondary hover:bg-secondary/80'
                     }`}
                 >
                   {emoji}
@@ -104,11 +138,17 @@ export function Onboarding() {
           {/* Continue Button */}
           <Button
             onClick={handleContinue}
-            disabled={!displayName.trim()}
+            disabled={!displayName.trim() || isLoading}
             className="w-full h-12 gradient-space text-primary-foreground font-semibold rounded-xl shadow-soft hover:shadow-glow transition-all disabled:opacity-50"
           >
-            <span>Get Started</span>
-            <ArrowRight className="w-5 h-5 ml-2" />
+            {isLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <>
+                <span>Get Started</span>
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </>
+            )}
           </Button>
 
           {/* Privacy Note */}
