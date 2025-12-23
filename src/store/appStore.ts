@@ -45,32 +45,52 @@ const generateMockUsers = (center: Location, count: number): User[] => {
   }));
 };
 
-// Mock spaces for demo
+// Mock spaces for demo - spread out for better visibility
 const createMockSpaces = (): Space[] => {
-  const baseLocation = { lat: 37.7749, lng: -122.4194 };
-  
   return [
     {
       id: 'space-1',
       name: 'Sunday Jazz in the Park',
       hostId: 'host-1',
       hostName: 'Jamie',
-      center: { lat: 37.7749, lng: -122.4194 },
+      center: { lat: 37.7749, lng: -122.4194 }, // User's location (center)
       radius: 250,
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000),
-      participants: generateMockUsers(baseLocation, 8),
+      participants: generateMockUsers({ lat: 37.7749, lng: -122.4194 }, 8),
     },
     {
       id: 'space-2',
       name: 'Tech Meetup @ Coffee House',
       hostId: 'host-2',
       hostName: 'Chris',
-      center: { lat: 37.7769, lng: -122.4174 },
+      center: { lat: 37.7780, lng: -122.4150 }, // ~400m NE
       radius: 150,
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
-      participants: generateMockUsers({ lat: 37.7769, lng: -122.4174 }, 5),
+      participants: generateMockUsers({ lat: 37.7780, lng: -122.4150 }, 5),
+    },
+    {
+      id: 'space-3',
+      name: 'Yoga at Sunset',
+      hostId: 'host-3',
+      hostName: 'Maya',
+      center: { lat: 37.7720, lng: -122.4240 }, // ~500m SW
+      radius: 200,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 1.5 * 60 * 60 * 1000),
+      participants: generateMockUsers({ lat: 37.7720, lng: -122.4240 }, 12),
+    },
+    {
+      id: 'space-4',
+      name: 'Food Truck Friday',
+      hostId: 'host-4',
+      hostName: 'Leo',
+      center: { lat: 37.7770, lng: -122.4230 }, // ~350m NW
+      radius: 180,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000),
+      participants: generateMockUsers({ lat: 37.7770, lng: -122.4230 }, 6),
     },
   ];
 };
