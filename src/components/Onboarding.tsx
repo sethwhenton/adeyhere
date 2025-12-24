@@ -134,9 +134,9 @@ export function Onboarding() {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-            className="w-20 h-20 mx-auto mb-6 rounded-3xl gradient-space shadow-glow flex items-center justify-center"
+            className="w-24 h-24 mx-auto mb-6 rounded-3xl shadow-glow overflow-hidden"
           >
-            <MapPin className="w-10 h-10 text-primary-foreground" />
+            <img src="/logo.jpg" alt="Adey Here Logo" className="w-full h-full object-cover" />
           </motion.div>
           <h1 className="text-3xl font-bold text-foreground mb-2">
             Welcome to <span className="text-gradient-space">Adey Here</span>
