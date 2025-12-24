@@ -94,3 +94,35 @@ export const useRealtimeSpaces = () => {
         };
     }, [queryClient]);
 };
+
+/**
+ * Hook to subscribe to real-time announcement updates in a space
+ */
+export const useRealtimeAnnouncements = (spaceId: string | undefined) => {
+    const queryClient = useQueryClient();
+
+    useEffect(() => {
+        if (!spaceId) return;
+
+        const channel = supabase
+            .channel(`announcements:${spaceId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'announcements',
+                    filter: `space_id=eq.${spaceId}`,
+                },
+                () => {
+                    // Invalidate and refetch announcements when a new one is posted
+                    queryClient.invalidateQueries({ queryKey: ['announcements', spaceId] });
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [spaceId, queryClient]);
+};

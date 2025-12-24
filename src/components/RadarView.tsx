@@ -19,8 +19,8 @@ import { AnnouncementBell } from './AnnouncementBell';
 import { AnnouncementFeed } from './AnnouncementFeed';
 import { AnnouncementCreator } from './AnnouncementCreator';
 import { CommunityHub } from './CommunityHub';
-import { useParticipants, useDeleteSpace } from '@/integrations/supabase/hooks';
-import { useRealtimeParticipants } from '@/integrations/supabase/realtime';
+import { useParticipants, useDeleteSpace, useAnnouncements, useCreateAnnouncement } from '@/integrations/supabase/hooks';
+import { useRealtimeParticipants, useRealtimeAnnouncements } from '@/integrations/supabase/realtime';
 import { useToggleGhostMode } from '@/integrations/supabase/interactions';
 import { haptics } from '@/lib/haptics';
 import { toast } from 'sonner';
@@ -40,33 +40,46 @@ export function RadarView() {
   const [showAnnouncementCreator, setShowAnnouncementCreator] = useState(false);
   const [showCommunityHub, setShowCommunityHub] = useState(false);
 
-  // Mock announcements - replace with Supabase hooks
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  // Real announcements from database
+  const { data: announcementsData = [] } = useAnnouncements(activeSpace?.id);
+  const createAnnouncementMutation = useCreateAnnouncement();
 
-  // Handler to publish announcements
+  // Convert DB format to UI format
+  const announcements: Announcement[] = announcementsData.map(a => ({
+    id: a.id,
+    spaceId: a.space_id,
+    hostId: a.host_id,
+    content: a.content,
+    imageUrl: a.image_url || undefined,
+    linkUrl: a.link_url || undefined,
+    linkText: a.link_text || undefined,
+    createdAt: new Date(a.created_at),
+    readBy: [], // We'll handle read status locally for now
+  }));
+
+  // Handler to publish announcements to database
   const handlePublishAnnouncement = async (data: { content: string; imageUrl?: string; linkUrl?: string; linkText?: string }) => {
-    const newAnnouncement: Announcement = {
-      id: Date.now().toString(),
-      spaceId: activeSpace?.id || '',
-      hostId: currentUser?.id || '',
-      content: data.content,
-      imageUrl: data.imageUrl,
-      linkUrl: data.linkUrl,
-      linkText: data.linkText,
-      createdAt: new Date(),
-      readBy: [],
-    };
-    setAnnouncements(prev => [newAnnouncement, ...prev]);
+    if (!activeSpace || !currentUser) return;
+
+    try {
+      await createAnnouncementMutation.mutateAsync({
+        spaceId: activeSpace.id,
+        hostId: currentUser.id,
+        content: data.content,
+        imageUrl: data.imageUrl,
+        linkUrl: data.linkUrl,
+        linkText: data.linkText,
+      });
+      toast.success('Announcement posted!');
+    } catch (error) {
+      console.error('Failed to post announcement:', error);
+      toast.error('Failed to post announcement');
+    }
   };
 
   const handleMarkAnnouncementRead = (id: string) => {
-    setAnnouncements(prev =>
-      prev.map(a =>
-        a.id === id && currentUser
-          ? { ...a, readBy: [...a.readBy, currentUser.id] }
-          : a
-      )
-    );
+    // For now we handle read status locally - could store in localStorage
+    // or create a separate announcement_reads table if persistence is needed
   };
 
   const handleCloseSpace = async () => {
@@ -101,6 +114,9 @@ export function RadarView() {
 
   // Real-time subscription for instant participant updates
   useRealtimeParticipants(activeSpace?.id);
+
+  // Real-time subscription for instant announcement updates
+  useRealtimeAnnouncements(activeSpace?.id);
 
   // Handle ghost mode with database sync
   const handleGhostModeToggle = async () => {

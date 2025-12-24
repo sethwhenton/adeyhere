@@ -201,6 +201,54 @@ export type Database = {
           }
         ]
       }
+      announcements: {
+        Row: {
+          id: string
+          space_id: string
+          host_id: string
+          content: string
+          image_url: string | null
+          link_url: string | null
+          link_text: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          space_id: string
+          host_id: string
+          content: string
+          image_url?: string | null
+          link_url?: string | null
+          link_text?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          space_id?: string
+          host_id?: string
+          content?: string
+          image_url?: string | null
+          link_url?: string | null
+          link_text?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcements_space_id_fkey"
+            columns: ["space_id"]
+            isOneToOne: false
+            referencedRelation: "spaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcements_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never

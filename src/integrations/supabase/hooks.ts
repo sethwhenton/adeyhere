@@ -178,3 +178,51 @@ export const useSendMessage = () => {
         },
     });
 };
+
+// --- Announcements ---
+
+export const useAnnouncements = (spaceId: string | undefined) => {
+    return useQuery({
+        queryKey: ["announcements", spaceId],
+        queryFn: async () => {
+            if (!spaceId) return [];
+            const { data, error } = await supabase
+                .from("announcements")
+                .select("*")
+                .eq("space_id", spaceId)
+                .order("created_at", { ascending: false });
+            if (error) throw error;
+            return data || [];
+        },
+        enabled: !!spaceId,
+    });
+};
+
+export const useCreateAnnouncement = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (announcement: {
+            spaceId: string;
+            hostId: string;
+            content: string;
+            imageUrl?: string;
+            linkUrl?: string;
+            linkText?: string;
+        }) => {
+            const { error } = await supabase
+                .from("announcements")
+                .insert([{
+                    space_id: announcement.spaceId,
+                    host_id: announcement.hostId,
+                    content: announcement.content,
+                    image_url: announcement.imageUrl,
+                    link_url: announcement.linkUrl,
+                    link_text: announcement.linkText,
+                }]);
+            if (error) throw error;
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ["announcements", variables.spaceId] });
+        },
+    });
+};
