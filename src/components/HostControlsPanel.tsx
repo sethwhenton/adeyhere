@@ -3,43 +3,46 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Shield,
     Megaphone,
-    MegaphoneOff,
     BarChart3,
     ChevronUp,
     ChevronDown,
     AlertTriangle,
+    XCircle,
     Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useToggleBroadcastOnly, useSpaceReports } from '@/integrations/supabase/moderation';
+import { useSpaceReports } from '@/integrations/supabase/moderation';
 import { toast } from 'sonner';
 
 interface HostControlsPanelProps {
     spaceId: string;
     spaceName: string;
-    broadcastOnly: boolean;
     onOpenAnalytics: () => void;
+    onCreateAnnouncement: () => void;
+    onCloseSpace: () => void;
 }
 
 export function HostControlsPanel({
     spaceId,
     spaceName,
-    broadcastOnly,
-    onOpenAnalytics
+    onOpenAnalytics,
+    onCreateAnnouncement,
+    onCloseSpace
 }: HostControlsPanelProps) {
     const [isExpanded, setIsExpanded] = useState(false);
-    const toggleBroadcast = useToggleBroadcastOnly();
+    const [isClosing, setIsClosing] = useState(false);
     const { data: reports = [] } = useSpaceReports(spaceId);
 
-    const handleToggleBroadcast = async () => {
+    const handleCloseSpace = async () => {
+        if (!window.confirm('Are you sure you want to close this Space? All data will be deleted.')) {
+            return;
+        }
+        setIsClosing(true);
         try {
-            await toggleBroadcast.mutateAsync({ spaceId, broadcastOnly: !broadcastOnly });
-            toast.success(broadcastOnly
-                ? 'Chat is now open to everyone'
-                : 'Only you can send messages now'
-            );
+            onCloseSpace();
         } catch (error) {
-            toast.error('Failed to update chat mode');
+            toast.error('Failed to close Space');
+            setIsClosing(false);
         }
     };
 
@@ -56,7 +59,7 @@ export function HostControlsPanel({
                     className="flex items-center gap-2 px-4 py-3 w-full hover:bg-secondary/50 transition-colors"
                 >
                     <Shield className="w-5 h-5 text-broadcast" />
-                    <span className="text-sm font-semibold text-foreground">Host Controls</span>
+                    <span className="text-sm font-semibold text-foreground">Host Dashboard</span>
                     {reports.length > 0 && (
                         <span className="w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-xs flex items-center justify-center">
                             {reports.length}
@@ -79,29 +82,15 @@ export function HostControlsPanel({
                             className="border-t border-border"
                         >
                             <div className="p-3 space-y-2">
-                                {/* Broadcast Only Toggle */}
+                                {/* Create Announcement */}
                                 <button
-                                    onClick={handleToggleBroadcast}
-                                    disabled={toggleBroadcast.isPending}
-                                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl transition-all ${broadcastOnly
-                                            ? 'bg-broadcast/20 text-broadcast'
-                                            : 'bg-secondary text-foreground hover:bg-secondary/80'
-                                        }`}
+                                    onClick={onCreateAnnouncement}
+                                    className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl bg-gradient-to-r from-sky-500/20 to-blue-500/20 text-sky-600 dark:text-sky-400 hover:from-sky-500/30 hover:to-blue-500/30 transition-all"
                                 >
-                                    {toggleBroadcast.isPending ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : broadcastOnly ? (
-                                        <Megaphone className="w-4 h-4" />
-                                    ) : (
-                                        <MegaphoneOff className="w-4 h-4" />
-                                    )}
+                                    <Megaphone className="w-4 h-4" />
                                     <div className="text-left">
-                                        <p className="text-sm font-medium">
-                                            {broadcastOnly ? 'Broadcast Mode ON' : 'Broadcast Mode OFF'}
-                                        </p>
-                                        <p className="text-xs opacity-70">
-                                            {broadcastOnly ? 'Only you can chat' : 'Everyone can chat'}
-                                        </p>
+                                        <p className="text-sm font-medium">Create Announcement</p>
+                                        <p className="text-xs opacity-70">Broadcast to all attendees</p>
                                     </div>
                                 </button>
 
@@ -127,6 +116,23 @@ export function HostControlsPanel({
                                         </div>
                                     </div>
                                 )}
+
+                                {/* Close Space */}
+                                <button
+                                    onClick={handleCloseSpace}
+                                    disabled={isClosing}
+                                    className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-all"
+                                >
+                                    {isClosing ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <XCircle className="w-4 h-4" />
+                                    )}
+                                    <div className="text-left">
+                                        <p className="text-sm font-medium">Close Space</p>
+                                        <p className="text-xs opacity-70">End event & delete data</p>
+                                    </div>
+                                </button>
                             </div>
                         </motion.div>
                     )}
@@ -135,3 +141,4 @@ export function HostControlsPanel({
         </motion.div>
     );
 }
+

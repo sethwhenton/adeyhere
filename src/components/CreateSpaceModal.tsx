@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, Clock, Users } from 'lucide-react';
+import { X, MapPin, Clock, Users, MessageCircle, Package, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
@@ -14,13 +14,29 @@ interface CreateSpaceModalProps {
   onClose: () => void;
 }
 
+interface SpaceFeatures {
+  groupChat: boolean;
+  lostAndFound: boolean;
+  qa: boolean;
+}
+
 export function CreateSpaceModal({ isOpen, onClose }: CreateSpaceModalProps) {
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
   const [radius, setRadius] = useState([200]);
   const [duration, setDuration] = useState([3]);
+  const [features, setFeatures] = useState<SpaceFeatures>({
+    groupChat: true,
+    lostAndFound: true,
+    qa: false,
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { currentUser, setActiveSpace } = useAppStore();
   const createMutation = useCreateSpace();
+
+  const toggleFeature = (feature: keyof SpaceFeatures) => {
+    setFeatures(prev => ({ ...prev, [feature]: !prev[feature] }));
+  };
 
   const handleCreate = async () => {
     if (name.trim() && currentUser) {
@@ -52,6 +68,7 @@ export function CreateSpaceModal({ isOpen, onClose }: CreateSpaceModalProps) {
         });
 
         setName('');
+        setDescription('');
         setRadius([200]);
         setDuration([3]);
         onClose();
@@ -83,7 +100,7 @@ export function CreateSpaceModal({ isOpen, onClose }: CreateSpaceModalProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 100, scale: 0.95 }}
             transition={{ type: 'spring', damping: 25 }}
-            className="fixed bottom-0 left-0 right-0 z-50 p-4"
+            className="fixed bottom-0 left-0 right-0 z-50 p-4 max-h-[90vh] overflow-y-auto"
           >
             <div className="bg-card rounded-3xl p-6 shadow-card max-w-lg mx-auto">
               {/* Header */}
@@ -102,10 +119,10 @@ export function CreateSpaceModal({ isOpen, onClose }: CreateSpaceModalProps) {
                 </button>
               </div>
 
-              {/* Space Name */}
-              <div className="mb-6">
+              {/* Space Title */}
+              <div className="mb-4">
                 <label className="block text-sm font-medium text-foreground mb-2">
-                  What's happening?
+                  Title
                 </label>
                 <Input
                   type="text"
@@ -115,6 +132,22 @@ export function CreateSpaceModal({ isOpen, onClose }: CreateSpaceModalProps) {
                   className="h-12 bg-secondary/50 border-border focus:border-primary"
                   maxLength={40}
                 />
+              </div>
+
+              {/* Description */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Description (optional)
+                </label>
+                <textarea
+                  placeholder="Tell people what your space is about..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={2}
+                  maxLength={150}
+                  className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:border-primary focus:outline-none resize-none text-foreground"
+                />
+                <p className="text-xs text-muted-foreground mt-1 text-right">{description.length}/150</p>
               </div>
 
               {/* Radius Slider */}
@@ -142,7 +175,7 @@ export function CreateSpaceModal({ isOpen, onClose }: CreateSpaceModalProps) {
               </div>
 
               {/* Duration Slider */}
-              <div className="mb-8">
+              <div className="mb-6">
                 <div className="flex items-center justify-between mb-3">
                   <label className="text-sm font-medium text-foreground flex items-center gap-2">
                     <Clock className="w-4 h-4 text-muted-foreground" />
@@ -160,6 +193,80 @@ export function CreateSpaceModal({ isOpen, onClose }: CreateSpaceModalProps) {
                   step={1}
                   className="w-full"
                 />
+              </div>
+
+              {/* Feature Toggles */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-foreground mb-3">
+                  Features
+                </label>
+                <div className="space-y-2">
+                  {/* Group Chat Toggle */}
+                  <button
+                    onClick={() => toggleFeature('groupChat')}
+                    className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl transition-all ${features.groupChat
+                        ? 'bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30'
+                        : 'bg-secondary text-muted-foreground border border-transparent'
+                      }`}
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-medium">Group Chat</p>
+                      <p className="text-xs opacity-70">Real-time chat for everyone</p>
+                    </div>
+                    <div className={`w-10 h-6 rounded-full transition-colors ${features.groupChat ? 'bg-sky-500' : 'bg-secondary-foreground/30'}`}>
+                      <motion.div
+                        layout
+                        className="w-5 h-5 bg-white rounded-full shadow mt-0.5"
+                        style={{ marginLeft: features.groupChat ? 18 : 2 }}
+                      />
+                    </div>
+                  </button>
+
+                  {/* Lost & Found Toggle */}
+                  <button
+                    onClick={() => toggleFeature('lostAndFound')}
+                    className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl transition-all ${features.lostAndFound
+                        ? 'bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30'
+                        : 'bg-secondary text-muted-foreground border border-transparent'
+                      }`}
+                  >
+                    <Package className="w-5 h-5" />
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-medium">Lost & Found</p>
+                      <p className="text-xs opacity-70">Help find lost items</p>
+                    </div>
+                    <div className={`w-10 h-6 rounded-full transition-colors ${features.lostAndFound ? 'bg-sky-500' : 'bg-secondary-foreground/30'}`}>
+                      <motion.div
+                        layout
+                        className="w-5 h-5 bg-white rounded-full shadow mt-0.5"
+                        style={{ marginLeft: features.lostAndFound ? 18 : 2 }}
+                      />
+                    </div>
+                  </button>
+
+                  {/* Q&A Toggle */}
+                  <button
+                    onClick={() => toggleFeature('qa')}
+                    className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl transition-all ${features.qa
+                        ? 'bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30'
+                        : 'bg-secondary text-muted-foreground border border-transparent'
+                      }`}
+                  >
+                    <HelpCircle className="w-5 h-5" />
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-medium">Q&A</p>
+                      <p className="text-xs opacity-70">FAQs for attendees</p>
+                    </div>
+                    <div className={`w-10 h-6 rounded-full transition-colors ${features.qa ? 'bg-sky-500' : 'bg-secondary-foreground/30'}`}>
+                      <motion.div
+                        layout
+                        className="w-5 h-5 bg-white rounded-full shadow mt-0.5"
+                        style={{ marginLeft: features.qa ? 18 : 2 }}
+                      />
+                    </div>
+                  </button>
+                </div>
               </div>
 
               {/* Preview Card */}
@@ -194,3 +301,4 @@ export function CreateSpaceModal({ isOpen, onClose }: CreateSpaceModalProps) {
     </AnimatePresence>
   );
 }
+

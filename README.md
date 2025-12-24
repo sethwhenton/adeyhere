@@ -18,11 +18,12 @@ The core philosophy is centered on hyper-local and temporary connections. Digita
 ## Technology Stack
 
 - **Frontend**: React, TypeScript, TailwindCSS
+- **Mobile**: Capacitor (iOS & Android)
 - **Maps**: Leaflet (OpenStreetMap + CartoDB Dark Matter tiles)
 - **State Management**: Zustand
 - **Backend**: Supabase (Database, Auth, Realtime, Edge Functions)
 
-## Getting Started
+## Getting Started (Web)
 
 ### Prerequisites
 
@@ -46,6 +47,64 @@ The core philosophy is centered on hyper-local and temporary connections. Digita
    npm run dev
    ```
 
-## License
+## Mobile Deployment
 
-This project is for personal use and development.
+This project uses [Capacitor](https://capacitorjs.com/) to wrap the web app for native mobile deployment.
+
+### Prerequisites for Mobile
+- **Android**: Android Studio (available on Windows, Mac, Linux).
+- **iOS**: Xcode (MAC ONLY). You cannot build for iOS on Windows.
+
+### How to Run on Android (Windows/Mac/Linux)
+
+1. **Build the web assets**:
+   This compiles your React code into the `dist` folder.
+   ```bash
+   npm run build
+   ```
+
+2. **Sync with Capacitor**:
+   This updates the native Android project with your latest web build and plugins.
+   ```bash
+   npx cap sync
+   ```
+
+3. **Open in Android Studio**:
+   ```bash
+   npx cap open android
+   ```
+
+4. **Run the App**:
+   - Connect an Android device via USB (ensure USB Debugging is on) OR create an Emulator in AVD Manager.
+   - Click the **Run** (Play) button in Android Studio.
+
+### How to Run on iOS (Mac Only)
+
+If you have cloned this repository on a Mac, follow these steps to deploy to an iPhone or Simulator.
+
+1. **Add iOS Platform** (if not already present):
+   ```bash
+   npm install
+   npx cap add ios
+   ```
+
+2. **Build and Sync**:
+   ```bash
+   npm run build
+   npx cap sync
+   ```
+
+3. **Open in Xcode**:
+   ```bash
+   npx cap open ios
+   ```
+
+4. **Run the App**:
+   - Select a Simulator (e.g., iPhone 15) or connected device from the top bar.
+   - Click the **Run** (Play) button.
+   - *Note: You may need to sign the app with your Apple ID in the "Signing & Capabilities" tab.*
+
+## Troubleshooting
+
+- **Supabase Reset**: If you encounter database issues, execute the SQL script located in `supabase/reset.sql` via the Supabase Dashboard SQL Editor.
+- **Changes not reflecting on mobile**: Ensure you run `npm run build` and `npx cap sync` after every code change before running the native app.

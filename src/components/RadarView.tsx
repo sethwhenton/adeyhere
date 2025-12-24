@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Ghost, Eye, MessageCircle, Send, ArrowLeft, Radio, UserPlus, Sparkles, Palette } from 'lucide-react';
+import { Ghost, Eye, MessageCircle, Send, ArrowLeft, Radio, UserPlus, Sparkles, Palette, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/store/appStore';
 import { distanceToRadarPosition } from '@/lib/geo';
-import { User } from '@/types';
+import { User, Announcement } from '@/types';
 import { TownSquare } from './TownSquare';
 import { PounceModal } from './PounceModal';
 import { StatusPicker } from './StatusPicker';
@@ -15,14 +15,18 @@ import { SpaceAnalyticsModal } from './SpaceAnalyticsModal';
 import { ModerationModal } from './ModerationModal';
 import { BeaconModal } from './BeaconModal';
 import { ThemePicker } from './ThemePicker';
-import { useParticipants } from '@/integrations/supabase/hooks';
+import { AnnouncementBell } from './AnnouncementBell';
+import { AnnouncementFeed } from './AnnouncementFeed';
+import { AnnouncementCreator } from './AnnouncementCreator';
+import { CommunityHub } from './CommunityHub';
+import { useParticipants, useDeleteSpace } from '@/integrations/supabase/hooks';
 import { useRealtimeParticipants } from '@/integrations/supabase/realtime';
 import { useToggleGhostMode } from '@/integrations/supabase/interactions';
 import { haptics } from '@/lib/haptics';
 import { toast } from 'sonner';
 
 export function RadarView() {
-  const { activeSpace, currentUser, toggleGhostMode, logout } = useAppStore();
+  const { activeSpace, currentUser, toggleGhostMode, logout, setActiveSpace } = useAppStore();
   const [selectedNode, setSelectedNode] = useState<User | null>(null);
   const [showChat, setShowChat] = useState(false);
   const [showPounce, setShowPounce] = useState(false);
@@ -32,18 +36,68 @@ export function RadarView() {
   const [showModeration, setShowModeration] = useState(false);
   const [showBeacon, setShowBeacon] = useState(false);
   const [showTheme, setShowTheme] = useState(false);
-  const [broadcastOnly, setBroadcastOnly] = useState(activeSpace?.broadcastOnly || false);
+  const [showAnnouncementFeed, setShowAnnouncementFeed] = useState(false);
+  const [showAnnouncementCreator, setShowAnnouncementCreator] = useState(false);
+  const [showCommunityHub, setShowCommunityHub] = useState(false);
 
-  // Sync broadcast mode if space setting changes
-  useEffect(() => {
-    if (activeSpace?.broadcastOnly !== undefined) {
-      setBroadcastOnly(activeSpace.broadcastOnly);
+  // Mock announcements - replace with Supabase hooks
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+
+  // Handler to publish announcements
+  const handlePublishAnnouncement = async (data: { content: string; imageUrl?: string; linkUrl?: string; linkText?: string }) => {
+    const newAnnouncement: Announcement = {
+      id: Date.now().toString(),
+      spaceId: activeSpace?.id || '',
+      hostId: currentUser?.id || '',
+      content: data.content,
+      imageUrl: data.imageUrl,
+      linkUrl: data.linkUrl,
+      linkText: data.linkText,
+      createdAt: new Date(),
+      readBy: [],
+    };
+    setAnnouncements(prev => [newAnnouncement, ...prev]);
+  };
+
+  const handleMarkAnnouncementRead = (id: string) => {
+    setAnnouncements(prev =>
+      prev.map(a =>
+        a.id === id && currentUser
+          ? { ...a, readBy: [...a.readBy, currentUser.id] }
+          : a
+      )
+    );
+  };
+
+  const handleCloseSpace = async () => {
+    if (!activeSpace || !currentUser) return;
+
+    try {
+      await deleteSpaceMutation.mutateAsync({
+        spaceId: activeSpace.id,
+        hostId: currentUser.id
+      });
+
+      toast.success('Space closed and all data deleted');
+
+      // Clear active space and return to map
+      setActiveSpace(null);
+    } catch (e) {
+      console.error('Failed to close space:', e);
+      toast.error('Failed to close space');
     }
-  }, [activeSpace?.broadcastOnly]);
+  };
 
-  const { data: participants = [] } = useParticipants(activeSpace?.id);
+  const { data: participantsRaw = [] } = useParticipants(activeSpace?.id);
+  const deleteSpaceMutation = useDeleteSpace();
   const ghostModeMutation = useToggleGhostMode();
-  const leaveSpace = () => logout();
+  const leaveSpace = () => setActiveSpace(null);
+
+  // Map participants to include isHost flag
+  const participants = participantsRaw.map(p => ({
+    ...p,
+    isHost: p.id === activeSpace?.hostId
+  }));
 
   // Real-time subscription for instant participant updates
   useRealtimeParticipants(activeSpace?.id);
@@ -76,9 +130,21 @@ export function RadarView() {
         <HostControlsPanel
           spaceId={activeSpace.id}
           spaceName={activeSpace.name}
-          broadcastOnly={broadcastOnly}
           onOpenAnalytics={() => setShowAnalytics(true)}
+          onCreateAnnouncement={() => setShowAnnouncementCreator(true)}
+          onCloseSpace={handleCloseSpace}
         />
+      )}
+
+      {/* Announcement Bell - Only visible to attendees */}
+      {!isHost && (
+        <div className="absolute top-28 left-4 z-30">
+          <AnnouncementBell
+            announcements={announcements}
+            userId={currentUser.id}
+            onOpen={() => setShowAnnouncementFeed(true)}
+          />
+        </div>
       )}
 
       {/* Radar Background */}
@@ -232,16 +298,16 @@ export function RadarView() {
           )}
         </button>
 
-        {/* Status Vibe Button */}
+        {/* Chat Button - Opens Community Hub */}
         <button
           onClick={() => {
-            setShowStatus(true);
+            setShowCommunityHub(true);
             haptics.tap();
           }}
-          className="flex items-center gap-2 px-4 py-3 rounded-2xl shadow-card bg-card text-foreground"
+          className="flex items-center gap-2 px-4 py-3 rounded-2xl shadow-card bg-gradient-to-r from-sky-500/20 to-blue-500/20 text-foreground"
         >
-          <Sparkles className="w-5 h-5" />
-          <span className="text-sm font-medium">Set Vibe</span>
+          <MessageCircle className="w-5 h-5 text-sky-500" />
+          <span className="text-sm font-medium">Chat</span>
         </button>
 
         {/* Beacon Button */}
@@ -255,18 +321,6 @@ export function RadarView() {
           <Radio className="w-5 h-5 text-amber-500" />
           <span className="text-sm font-medium">Beacon</span>
         </button>
-
-        {/* Theme Button */}
-        <button
-          onClick={() => {
-            setShowTheme(true);
-            haptics.tap();
-          }}
-          className="flex items-center gap-2 px-4 py-3 rounded-2xl shadow-card bg-card text-foreground"
-        >
-          <Palette className="w-5 h-5" />
-          <span className="text-sm font-medium">Theme</span>
-        </button>
       </motion.div>
 
       {/* Bottom Actions */}
@@ -277,11 +331,11 @@ export function RadarView() {
         className="absolute bottom-6 left-4 right-4 z-30"
       >
         <Button
-          onClick={() => setShowChat(true)}
+          onClick={() => setShowCommunityHub(true)}
           className="w-full h-14 rounded-2xl gradient-space text-primary-foreground font-semibold shadow-glow"
         >
-          <MessageCircle className="w-5 h-5 mr-2" />
-          Town Square
+          <Home className="w-5 h-5 mr-2" />
+          Community Hub
         </Button>
       </motion.div>
 
@@ -427,6 +481,33 @@ export function RadarView() {
       <ThemePicker
         isOpen={showTheme}
         onClose={() => setShowTheme(false)}
+      />
+
+      {/* Announcement Feed (Attendees) */}
+      <AnnouncementFeed
+        isOpen={showAnnouncementFeed}
+        onClose={() => setShowAnnouncementFeed(false)}
+        announcements={announcements}
+        userId={currentUser.id}
+        onMarkAsRead={handleMarkAnnouncementRead}
+      />
+
+      {/* Announcement Creator (Host) */}
+      <AnnouncementCreator
+        isOpen={showAnnouncementCreator}
+        onClose={() => setShowAnnouncementCreator(false)}
+        onPublish={handlePublishAnnouncement}
+      />
+
+      {/* Community Hub */}
+      <CommunityHub
+        isOpen={showCommunityHub}
+        onClose={() => setShowCommunityHub(false)}
+        spaceId={activeSpace.id}
+        spaceName={activeSpace.name}
+        isHost={isHost}
+        currentUserId={currentUser.id}
+        latestAnnouncement={announcements[0]}
       />
     </div>
   );

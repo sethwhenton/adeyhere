@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import L from 'leaflet';
 // Don't import from react-leaflet anymore
-import { MapPin, Plus, Users, Clock, ChevronRight, Locate } from 'lucide-react';
+import { MapPin, Plus, Users, Clock, ChevronRight, Locate, Calendar, Info, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { calculateDistance } from '@/lib/geo';
 import { CreateSpaceModal } from './CreateSpaceModal';
+import { ManageSpacesModal } from './ManageSpacesModal';
 import { Space } from '@/types';
 import { useSpaces, useJoinSpace } from '@/integrations/supabase/hooks';
 import { useRealtimeSpaces } from '@/integrations/supabase/realtime';
@@ -16,6 +17,7 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAppStore } from '@/store/appStore';
+import { formatDistanceToNow } from 'date-fns';
 
 // Note: leaflet CSS is imported in main.tsx
 
@@ -23,16 +25,19 @@ export function MapView() {
   const { location } = useGeolocation();
   const { currentUser, setActiveSpace, activeSpace } = useAppStore();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showManageModal, setShowManageModal] = useState(false);
   const [selectedSpace, setSelectedSpace] = useState<any | null>(null);
   const [isJoining, setIsJoining] = useState(false);
   const [geofenceAlert, setGeofenceAlert] = useState<{ id: string; name: string } | null>(null);
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Refs for Leaflet
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
   const spaceMarkersRef = useRef<Map<string, L.Marker>>(new Map());
+  const radiusCirclesRef = useRef<Map<string, L.Circle>>(new Map());
 
   // Default to San Francisco if no location yet
   const userLocation = currentUser?.location || location || { lat: 37.7749, lng: -122.4194 };
@@ -42,17 +47,47 @@ export function MapView() {
   const joinMutation = useJoinSpace();
   useRealtimeSpaces();
 
-  // Find nearby spaces (Mapped safely)
-  const nearbySpaces = (spacesData || []).map((s: any) => ({
+  // Find nearby spaces (Memoized to prevent infinite loops)
+  const nearbySpaces = useMemo(() => (spacesData || []).map((s: any) => ({
     id: s.id,
     name: s.name,
     hostId: s.host_id,
     hostName: s.host?.display_name || 'Unknown',
+    hostAvatar: s.host?.avatar || '😊',
     center: { lat: s.center_lat, lng: s.center_lng },
     radius: s.radius,
+    createdAt: new Date(s.created_at),
     expiresAt: new Date(s.expires_at),
     participantCount: s.participants?.[0]?.count || 0,
-  }));
+    description: s.description || '',
+  })), [spacesData]);
+
+  // Filter spaces hosted by current user
+  const userHostedSpaces = useMemo(() =>
+    nearbySpaces.filter((space: any) => currentUser && space.hostId === currentUser.id),
+    [nearbySpaces, currentUser]);
+
+  // Handle space click - if inside radius, go to radar; otherwise show popup
+  const handleSpaceClick = (space: any) => {
+    const distance = calculateDistance(userLocation, space.center);
+    if (distance <= space.radius) {
+      // User is inside the space perimeter - go directly to radar
+      setActiveSpace({
+        id: space.id,
+        name: space.name,
+        hostId: space.hostId,
+        hostName: space.hostName,
+        center: space.center,
+        radius: space.radius,
+        createdAt: space.createdAt,
+        expiresAt: space.expiresAt,
+        participants: []
+      });
+    } else {
+      // User is outside - show detailed popup
+      setSelectedSpace(space);
+    }
+  };
 
   // --- Initialize Map ---
   useEffect(() => {
@@ -154,22 +189,50 @@ export function MapView() {
       } else {
         const marker = L.marker([space.center.lat, space.center.lng], { icon: spaceIcon })
           .addTo(map)
-          .on('click', () => setSelectedSpace(space));
+          .on('click', () => handleSpaceClick(space));
 
         spaceMarkersRef.current.set(space.id, marker);
+      }
+
+      // Add/Update radius circles
+      if (radiusCirclesRef.current.has(space.id)) {
+        const circle = radiusCirclesRef.current.get(space.id)!;
+        circle.setLatLng([space.center.lat, space.center.lng]);
+        circle.setRadius(space.radius);
+      } else {
+        const circle = L.circle([space.center.lat, space.center.lng], {
+          radius: space.radius,
+          color: '#3b82f6',
+          fillColor: '#3b82f6',
+          fillOpacity: 0.1,
+          weight: 2,
+          dashArray: '5, 10',
+        }).addTo(map);
+        radiusCirclesRef.current.set(space.id, circle);
+      }
+    });
+
+    // Remove old radius circles not in current data
+    radiusCirclesRef.current.forEach((circle, id) => {
+      if (!currentIds.has(id)) {
+        circle.remove();
+        radiusCirclesRef.current.delete(id);
       }
     });
   }, [nearbySpaces, selectedSpace]);
 
 
+  // Memoize spaces for geofencing to prevent infinite loops
+  const geofencingSpaces = useMemo(() => nearbySpaces.map(s => ({
+    id: s.id,
+    name: s.name,
+    center: s.center,
+    radius: s.radius,
+  })), [nearbySpaces]);
+
   // Geofencing: Track entry/exit events
   useGeofencing({
-    spaces: nearbySpaces.map(s => ({
-      id: s.id,
-      name: s.name,
-      center: s.center,
-      radius: s.radius,
-    })),
+    spaces: geofencingSpaces,
     userLocation,
     onEnter: async (spaceId, spaceName) => {
       // Show alert if not already dismissed and not currently in a space
@@ -258,23 +321,43 @@ export function MapView() {
         </motion.div>
       </div>
 
-      {/* Host Button */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="absolute bottom-24 inset-x-0 flex justify-center z-[400] pointer-events-none"
-      >
-        <Button
-          onClick={() => setShowCreateModal(true)}
-          className="h-14 px-8 rounded-2xl gradient-space text-primary-foreground font-bold text-lg shadow-glow hover:shadow-soft transition-all pointer-events-auto"
+      {/* Host/Manage Button - Hidden when modal is open OR space is selected */}
+      {!showCreateModal && !showManageModal && !selectedSpace && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="absolute bottom-28 inset-x-0 flex justify-center z-[400] pointer-events-none"
         >
-          <Plus className="w-6 h-6 mr-2 stroke-[3]" />
-          Host a Space
-        </Button>
-      </motion.div>
+          {activeSpace ? (
+            <Button
+              onClick={() => setActiveSpace(activeSpace)}
+              className="h-14 px-8 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg shadow-glow hover:shadow-soft transition-all pointer-events-auto"
+            >
+              <MapPin className="w-6 h-6 mr-2 stroke-[3]" />
+              View Space
+            </Button>
+          ) : userHostedSpaces.length > 0 ? (
+            <Button
+              onClick={() => setShowManageModal(true)}
+              className="h-14 px-8 rounded-2xl gradient-space text-primary-foreground font-bold text-lg shadow-glow hover:shadow-soft transition-all pointer-events-auto"
+            >
+              <Layers className="w-6 h-6 mr-2 stroke-[3]" />
+              Manage Spaces
+            </Button>
+          ) : (
+            <Button
+              onClick={() => setShowCreateModal(true)}
+              className="h-14 px-8 rounded-2xl gradient-space text-primary-foreground font-bold text-lg shadow-glow hover:shadow-soft transition-all pointer-events-auto"
+            >
+              <Plus className="w-6 h-6 mr-2 stroke-[3]" />
+              Host a Space
+            </Button>
+          )}
+        </motion.div>
+      )}
 
-      {/* Join Space Card */}
+      {/* Space Detail Card (for spaces outside perimeter) */}
       <AnimatePresence mode="wait">
         {selectedSpace && (
           <motion.div
@@ -301,14 +384,20 @@ export function MapView() {
               className="absolute bottom-0 left-0 right-0 p-4"
             >
               <div className="bg-card rounded-3xl p-5 shadow-2xl border border-white/10" onClick={(e) => e.stopPropagation()}>
+                {/* Header with Host Avatar */}
                 <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-xl font-bold text-foreground mb-1">
-                      {selectedSpace.name}
-                    </h3>
-                    <p className="text-muted-foreground">
-                      Hosted by {selectedSpace.hostName}
-                    </p>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl gradient-space flex items-center justify-center text-2xl">
+                      {selectedSpace.hostAvatar || '😊'}
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-foreground mb-0.5">
+                        {selectedSpace.name}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Hosted by {selectedSpace.hostName}
+                      </p>
+                    </div>
                   </div>
                   <button
                     onClick={() => setSelectedSpace(null)}
@@ -318,12 +407,23 @@ export function MapView() {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-4 mb-5">
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                {/* Description (if available) */}
+                {selectedSpace.description && (
+                  <div className="mb-4 p-3 bg-secondary/50 rounded-xl">
+                    <div className="flex items-start gap-2">
+                      <Info className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-foreground">{selectedSpace.description}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Stats Row */}
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground bg-secondary/50 px-2.5 py-1.5 rounded-lg">
                     <Users className="w-4 h-4" />
                     <span>{selectedSpace.participantCount} people</span>
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground bg-secondary/50 px-2.5 py-1.5 rounded-lg">
                     <Clock className="w-4 h-4" />
                     <span>
                       {Math.max(0, Math.round(
@@ -331,14 +431,30 @@ export function MapView() {
                       ))}h left
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground bg-secondary/50 px-2.5 py-1.5 rounded-lg">
                     <MapPin className="w-4 h-4" />
-                    <span>{Math.round(calculateDistance(userLocation, selectedSpace.center))}m</span>
+                    <span>{Math.round(calculateDistance(userLocation, selectedSpace.center))}m away</span>
                   </div>
                 </div>
 
+                {/* Created time */}
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-5">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Created {formatDistanceToNow(selectedSpace.createdAt, { addSuffix: true })}</span>
+                </div>
+
+                {/* Distance Warning */}
+                {calculateDistance(userLocation, selectedSpace.center) > selectedSpace.radius && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-4">
+                    <p className="text-sm text-amber-600 dark:text-amber-400 text-center">
+                      📍 You're {Math.round(calculateDistance(userLocation, selectedSpace.center) - selectedSpace.radius)}m away from this space's perimeter
+                    </p>
+                  </div>
+                )}
+
+                {/* Action Button */}
                 <Button
-                  disabled={isJoining}
+                  disabled={isJoining || calculateDistance(userLocation, selectedSpace.center) > selectedSpace.radius}
                   onClick={async () => {
                     if (!currentUser) return;
                     setIsJoining(true);
@@ -347,7 +463,17 @@ export function MapView() {
                         spaceId: selectedSpace.id,
                         userId: currentUser.id
                       });
-                      setActiveSpace(selectedSpace);
+                      setActiveSpace({
+                        id: selectedSpace.id,
+                        name: selectedSpace.name,
+                        hostId: selectedSpace.hostId,
+                        hostName: selectedSpace.hostName,
+                        center: selectedSpace.center,
+                        radius: selectedSpace.radius,
+                        createdAt: selectedSpace.createdAt,
+                        expiresAt: selectedSpace.expiresAt,
+                        participants: []
+                      });
                       setSelectedSpace(null);
                     } catch (e) {
                       toast.error("Failed to join space");
@@ -355,9 +481,18 @@ export function MapView() {
                       setIsJoining(false);
                     }
                   }}
-                  className="w-full h-12 rounded-xl gradient-space text-primary-foreground font-semibold shadow-soft"
+                  className={`w-full h-12 rounded-xl font-semibold shadow-soft ${calculateDistance(userLocation, selectedSpace.center) > selectedSpace.radius
+                    ? 'bg-secondary text-muted-foreground cursor-not-allowed'
+                    : 'gradient-space text-primary-foreground'
+                    }`}
                 >
-                  {isJoining ? <Loader2 className="animate-spin" /> : <>Join Space <ChevronRight className="w-5 h-5 ml-2" /></>}
+                  {isJoining ? (
+                    <Loader2 className="animate-spin" />
+                  ) : calculateDistance(userLocation, selectedSpace.center) > selectedSpace.radius ? (
+                    'Get Closer to Join'
+                  ) : (
+                    <>Join Space <ChevronRight className="w-5 h-5 ml-2" /></>
+                  )}
                 </Button>
               </div>
             </motion.div>
@@ -371,8 +506,8 @@ export function MapView() {
         onClose={() => setShowCreateModal(false)}
       />
 
-      {/* Geofence Entry Alert */}
-      {geofenceAlert && !dismissedAlerts.has(geofenceAlert.id) && (
+      {/* Geofence Entry Alert - Only verify if space still exists */}
+      {geofenceAlert && !dismissedAlerts.has(geofenceAlert.id) && nearbySpaces.some(s => s.id === geofenceAlert.id) && (
         <GeofenceAlert
           spaceId={geofenceAlert.id}
           spaceName={geofenceAlert.name}
@@ -390,7 +525,17 @@ export function MapView() {
                   spaceId: space.id,
                   userId: currentUser.id,
                 });
-                setActiveSpace(space);
+                setActiveSpace({
+                  id: space.id,
+                  name: space.name,
+                  hostId: space.hostId,
+                  hostName: space.hostName,
+                  center: space.center,
+                  radius: space.radius,
+                  createdAt: space.createdAt,
+                  expiresAt: space.expiresAt,
+                  participants: []
+                });
               }
               setGeofenceAlert(null);
             } catch (e) {
@@ -405,6 +550,14 @@ export function MapView() {
           }}
         />
       )}
+
+      {/* Manage Spaces Modal */}
+      <ManageSpacesModal
+        isOpen={showManageModal}
+        onClose={() => setShowManageModal(false)}
+        spaces={userHostedSpaces}
+        onSpaceDeleted={() => setRefreshKey(prev => prev + 1)}
+      />
     </div>
   );
 }

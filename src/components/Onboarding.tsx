@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { MapPin, User, ArrowRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,45 @@ export function Onboarding() {
   const [displayName, setDisplayName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const { setCurrentUser, setOnboarded } = useAppStore();
+
+  // Check for existing session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (session?.user) {
+          // User has an active session, fetch their profile
+          // @ts-ignore - Supabase types not yet generated
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          if (profile && !error) {
+            // Restore user state
+            setCurrentUser({
+              id: profile.id,
+              displayName: profile.display_name,
+              avatar: profile.avatar,
+              isGhost: profile.is_ghost || false,
+              location: profile.location || { lat: 37.7749, lng: -122.4194 },
+            });
+            setOnboarded(true);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking session:', error);
+      } finally {
+        setIsCheckingSession(false);
+      }
+    };
+
+    checkSession();
+  }, [setCurrentUser, setOnboarded]);
 
   const handleContinue = async () => {
     if (!displayName.trim()) return;
@@ -59,6 +97,16 @@ export function Onboarding() {
       setIsLoading(false);
     }
   };
+
+  // Show loading while checking session
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen gradient-hero flex flex-col items-center justify-center p-6">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <p className="mt-4 text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen gradient-hero flex flex-col items-center justify-center p-6">

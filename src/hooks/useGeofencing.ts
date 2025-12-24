@@ -69,8 +69,15 @@ export function useGeofencing({
             }
         });
 
-        setInsideSpaces(currentlyInside);
-        previousInsideSpaces.current = currentlyInside;
+        // Only update state if the set of inside spaces has changed
+        const hasChanged =
+            currentlyInside.size !== previousInsideSpaces.current.size ||
+            Array.from(currentlyInside).some(id => !previousInsideSpaces.current.has(id));
+
+        if (hasChanged) {
+            setInsideSpaces(currentlyInside);
+            previousInsideSpaces.current = currentlyInside;
+        }
     }, [userLocation, spaces, onEnter, onExit]);
 
     return {

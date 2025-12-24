@@ -32,51 +32,41 @@ export function GeofenceAlert({
     return (
         <AnimatePresence>
             <motion.div
-                initial={{ opacity: 0, y: 50, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 50, scale: 0.95 }}
+                initial={{ opacity: 0, x: -20, scale: 0.95 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: -20, scale: 0.95 }}
                 transition={{ type: 'spring', damping: 20 }}
-                className="fixed bottom-24 left-4 right-4 z-50"
+                className="fixed top-24 left-4 z-[500] max-w-[280px]"
             >
-                <div className="bg-card rounded-3xl p-5 shadow-glow border-2 border-space">
-                    {/* Pulsing indicator */}
-                    <div className="absolute -top-2 -right-2 w-6 h-6 bg-space rounded-full animate-ping opacity-75" />
-                    <div className="absolute -top-2 -right-2 w-6 h-6 bg-space rounded-full" />
-
+                <div className="bg-card rounded-2xl p-3 shadow-card border border-space/30">
                     {/* Header */}
-                    <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-xl gradient-space flex items-center justify-center animate-pulse">
-                                <MapPin className="w-6 h-6 text-primary-foreground" />
+                    <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg gradient-space flex items-center justify-center">
+                                <MapPin className="w-4 h-4 text-primary-foreground" />
                             </div>
                             <div>
-                                <p className="text-sm text-space-deep font-semibold">You've arrived!</p>
-                                <h3 className="text-lg font-bold text-foreground">{spaceName}</h3>
+                                <p className="text-xs text-space-deep font-semibold">You've arrived!</p>
+                                <h3 className="text-sm font-bold text-foreground truncate max-w-[160px]">{spaceName}</h3>
                             </div>
                         </div>
                         <button
                             onClick={onDismiss}
-                            className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80"
+                            className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80"
                         >
-                            <X className="w-4 h-4" />
+                            <X className="w-3 h-3" />
                         </button>
                     </div>
 
-                    {/* Stats */}
-                    <div className="flex items-center gap-4 mb-4 text-sm text-muted-foreground">
-                        {participantCount > 0 && (
-                            <span className="flex items-center gap-1">
-                                <Users className="w-4 h-4" />
-                                {participantCount} {participantCount === 1 ? 'person' : 'people'}
-                            </span>
-                        )}
+                    {/* Stats - Compact */}
+                    <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
-                            <MapPin className="w-4 h-4" />
-                            {distance}m away
+                            <MapPin className="w-3 h-3" />
+                            {distance}m
                         </span>
                         {expiresAt && (
                             <span className="flex items-center gap-1">
-                                <Clock className="w-4 h-4" />
+                                <Clock className="w-3 h-3" />
                                 {hoursLeft}h left
                             </span>
                         )}
@@ -85,12 +75,14 @@ export function GeofenceAlert({
                     {/* CTA */}
                     <Button
                         onClick={onJoin}
-                        className="w-full h-12 rounded-xl gradient-space text-primary-foreground font-semibold shadow-soft"
+                        size="sm"
+                        className="w-full h-8 mt-2 rounded-lg gradient-space text-primary-foreground text-xs font-semibold"
                     >
-                        Join the Space
+                        Join Space
                     </Button>
                 </div>
             </motion.div>
         </AnimatePresence>
     );
 }
+

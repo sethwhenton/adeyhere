@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Adey Here</string>
+    <string name="title_activity_main">Adey Here</string>
+    <string name="package_name">com.adeyhere.app</string>
+    <string name="custom_url_scheme">com.adeyhere.app</string>
+</resources>

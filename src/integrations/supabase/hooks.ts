@@ -69,6 +69,23 @@ export const useCreateSpace = () => {
     });
 };
 
+export const useDeleteSpace = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ spaceId, hostId }: { spaceId: string, hostId: string }) => {
+            const { error } = await supabase
+                .from("spaces")
+                .delete()
+                .eq("id", spaceId)
+                .eq("host_id", hostId);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["spaces"] });
+        },
+    });
+};
+
 export const useJoinSpace = () => {
     const queryClient = useQueryClient();
     return useMutation({
