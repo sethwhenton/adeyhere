@@ -52,6 +52,7 @@ export function CreateSpaceModal({ isOpen, onClose }: CreateSpaceModalProps) {
           hostId: currentUser.id,
           hostName: currentUser.displayName,
           expiresAt,
+          description: description.trim(),
         });
 
         // Set the active space in store to enter Radar view
@@ -205,8 +206,8 @@ export function CreateSpaceModal({ isOpen, onClose }: CreateSpaceModalProps) {
                   <button
                     onClick={() => toggleFeature('groupChat')}
                     className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl transition-all ${features.groupChat
-                        ? 'bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30'
-                        : 'bg-secondary text-muted-foreground border border-transparent'
+                      ? 'bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30'
+                      : 'bg-secondary text-muted-foreground border border-transparent'
                       }`}
                   >
                     <MessageCircle className="w-5 h-5" />
@@ -227,8 +228,8 @@ export function CreateSpaceModal({ isOpen, onClose }: CreateSpaceModalProps) {
                   <button
                     onClick={() => toggleFeature('lostAndFound')}
                     className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl transition-all ${features.lostAndFound
-                        ? 'bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30'
-                        : 'bg-secondary text-muted-foreground border border-transparent'
+                      ? 'bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30'
+                      : 'bg-secondary text-muted-foreground border border-transparent'
                       }`}
                   >
                     <Package className="w-5 h-5" />
@@ -249,8 +250,8 @@ export function CreateSpaceModal({ isOpen, onClose }: CreateSpaceModalProps) {
                   <button
                     onClick={() => toggleFeature('qa')}
                     className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl transition-all ${features.qa
-                        ? 'bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30'
-                        : 'bg-secondary text-muted-foreground border border-transparent'
+                      ? 'bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30'
+                      : 'bg-secondary text-muted-foreground border border-transparent'
                       }`}
                   >
                     <HelpCircle className="w-5 h-5" />

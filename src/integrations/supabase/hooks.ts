@@ -56,7 +56,8 @@ export const useCreateSpace = () => {
                     center_lat: newSpace.center.lat,
                     center_lng: newSpace.center.lng,
                     radius: newSpace.radius,
-                    expires_at: newSpace.expiresAt.toISOString()
+                    expires_at: newSpace.expiresAt.toISOString(),
+                    description: newSpace.description
                 }])
                 .select()
                 .single();
@@ -121,7 +122,7 @@ export const useParticipants = (spaceId: string | undefined) => {
                 displayName: p.profile.display_name,
                 avatar: p.profile.avatar,
                 isGhost: p.profile.is_ghost,
-                location: p.profile.location,
+                location: p.profile.location as unknown as { lat: number; lng: number },
             }));
         },
         enabled: !!spaceId,

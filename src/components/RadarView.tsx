@@ -153,7 +153,7 @@ export function RadarView() {
         {[1, 0.75, 0.5, 0.25].map((scale, i) => (
           <div
             key={i}
-            className="absolute rounded-full border border-space/20"
+            className="absolute rounded-full border-2 border-space/60 shadow-[0_0_15px_rgba(56,189,248,0.3)]"
             style={{
               width: `${scale * 80}%`,
               height: `${scale * 80}%`,
@@ -323,21 +323,7 @@ export function RadarView() {
         </button>
       </motion.div>
 
-      {/* Bottom Actions */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="absolute bottom-6 left-4 right-4 z-30"
-      >
-        <Button
-          onClick={() => setShowCommunityHub(true)}
-          className="w-full h-14 rounded-2xl gradient-space text-primary-foreground font-semibold shadow-glow"
-        >
-          <Home className="w-5 h-5 mr-2" />
-          Community Hub
-        </Button>
-      </motion.div>
+
 
       {/* Node Detail Card */}
       <AnimatePresence>

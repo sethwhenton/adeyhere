@@ -43,9 +43,7 @@ export function BottomNav() {
                 <button
                   key={item.id}
                   onClick={() => {
-                    if (item.id === 'friends') {
-                      // TODO: Open friends modal/view
-                    } else if (item.id !== 'settings') {
+                    if (item.id !== 'settings') {
                       setViewMode(item.id as ViewMode);
                     }
                   }}

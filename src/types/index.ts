@@ -23,6 +23,7 @@ export interface Space {
   expiresAt: Date;
   participants: User[];
   broadcastOnly?: boolean;
+  description?: string;
 }
 
 export interface Message {

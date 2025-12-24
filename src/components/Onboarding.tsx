@@ -38,7 +38,7 @@ export function Onboarding() {
               displayName: profile.display_name,
               avatar: profile.avatar,
               isGhost: profile.is_ghost || false,
-              location: profile.location || { lat: 37.7749, lng: -122.4194 },
+              location: (profile.location as unknown as { lat: number; lng: number }) || { lat: 37.7749, lng: -122.4194 },
             });
             setOnboarded(true);
           }
@@ -63,6 +63,18 @@ export function Onboarding() {
 
       if (authError) throw authError;
       if (!authData.user) throw new Error("Authentication failed");
+
+      // Check for duplicate display name
+      const { count } = await supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('display_name', displayName.trim());
+
+      if (count && count > 0) {
+        toast.error("This name is already taken. Please choose another.");
+        setIsLoading(false);
+        return;
+      }
 
       // 2. Upsert profile
       const userProfile = {
